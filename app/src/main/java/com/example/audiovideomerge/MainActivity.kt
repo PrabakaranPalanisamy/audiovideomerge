@@ -29,7 +29,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
-class MainActivity : AppCompatActivity() {
+
+class MainActivity : AppCompatActivity(),AudioTrimmerView.OnSelectedRangeChangedListener {
     var txtMergeLocation: TextView? = null
     var txtAudioDuration: TextView? = null
     var audiview: AudioTrimmerView? = null
@@ -43,6 +44,8 @@ class MainActivity : AppCompatActivity() {
     var mHandler: Handler? = null
     var executorService: ExecutorService = Executors.newSingleThreadExecutor()
     var longRunningTaskFuture: Future<*>? = null
+    var chosenAudioFile: File? = null
+    var chosenVideoFile: File? = null
     override fun onDestroy() {
         super.onDestroy()
         runable?.let { mHandler?.removeCallbacks(it) }
@@ -52,6 +55,8 @@ class MainActivity : AppCompatActivity() {
         mediaPlayer = null
         runable = null
         mHandler = null
+        chosenAudioFile=null;
+        chosenVideoFile=null;
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,64 +78,25 @@ class MainActivity : AppCompatActivity() {
                         val data = result.data
                         val uri = data!!.data
                         audioUri = uri
+                        setupAudioFile(audioUri!!)
                         btnchooseAudio.setText(uri!!.path)
-                        val ins: InputStream
-                        val FILE_NAM = "mergevideo"
-                        val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
-                        val file = File(directory.toString())
-                        val outputFile =
-                            file.toString() + File.separator + FILE_NAM + "_audiotmp.mp4"
-                        ins = baseContext.getContentResolver().openInputStream(audioUri!!)!!
-                        var chosenAudioFile = createFileFromInputStream(ins, outputFile)
-                        audiview!!.setAudio(chosenAudioFile!!);
-                        audiview!!.show()
-                        audiview!!.setTotalAudioLength(extractAudioLength(chosenAudioFile.path))
-                        audiview!!.setExtraDragSpace(80F)
-                        audiview!!.setAudioSamples(getDummyWaveSample())
-                        audiview!!.setOnSelectedRangeChangedListener(object :
-                            AudioTrimmerView.OnSelectedRangeChangedListener {
-                            override fun onSelectRangeStart() {
-                                Log.e("onSelectRangeStart", "");
-//                                TODO("Not yet implemented")
-                            }
-
-                            override fun onSelectRange(startMillis: Long, endMillis: Long) {
-                                Log.e(
-                                    "onSelectedRange",
-                                    "statrt " + startMillis.toString() + " end " + endMillis.toString()
-                                )
-//                                TODO("Not yet implemented")
-                            }
-
-                            override fun onSelectRangeEnd(startMillis: Long, endMillis: Long) {
-                                Log.e(
-                                    "onSelectRangeEnd",
-                                    "statrt " + startMillis.toString() + " end " + endMillis.toString()
-                                )
-                                startTimeMillis = startMillis;
-                                endTimeMillis = endMillis;
-                                mediaPlayer?.seekTo(startTimeMillis.toInt())
-//                                TODO("Not yet implemented")
-                            }
-
-                            override fun onProgressStart() {
-                                Log.e("onProgressStart", "");
-//                                TODO("Not yet implemented")
-                            }
-
-                            override fun onProgressEnd(millis: Long) {
-                                mediaPlayer?.seekTo(millis.toInt())
-                                Log.e("onProgressEnd", "statrt " + millis.toString())
-//                                TODO("Not yet implemented")
-                            }
-
-                            override fun onDragProgressBar(millis: Long) {
-                                Log.e("onDragProgressBar", "statrt " + millis.toString())
-//                                TODO("Not yet implemented")
-                            }
-
-                        })
-                        showAudioPreview(true, chosenAudioFile)
+//                        val ins: InputStream
+//                        val FILE_NAM = "mergevideo"
+//                        val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
+//                        val file = File(directory.toString())
+//                        val outputFile =
+//                            file.toString() + File.separator + FILE_NAM + "_audiotmp.mp4"
+//                        ins = baseContext.getContentResolver().openInputStream(audioUri!!)!!
+//                        var chosenAudioFile = createFileFromInputStream(ins, outputFile)
+//                        audiview!!.setAudio(chosenAudioFile!!);
+//                        audiview!!.show()
+//                        audiview!!.setTotalAudioLength(extractAudioLength(chosenAudioFile.path))
+//                        audiview!!.setExtraDragSpace(80F)
+//                        audiview!!.setMinDuration(10000)
+//                        getDummyWaveSample()
+////                        audiview!!.setAudioSamples()
+//                        audiview!!.setOnSelectedRangeChangedListener(this@MainActivity)
+//                        showAudioPreview(true, chosenAudioFile)
                     }
                 }
 
@@ -147,6 +113,7 @@ class MainActivity : AppCompatActivity() {
                         val uri = data!!.data
                         videoUri = uri
                         btnchooseVideo.setText(uri!!.path)
+                        setupVideoFile(videoUri!!)
                     }
                 }
 
@@ -164,8 +131,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
         btnMerge.setOnClickListener {
+
             if (audioUri != null && videoUri != null)
-                mergeaudioVideo(audioUri!!, videoUri!!);
+            {
+                var intentd = Intent(this,MergeActivity::class.java)
+                intentd.putExtra("audioUri",chosenAudioFile!!.absolutePath)
+                intentd.putExtra("videoUri",chosenVideoFile!!.absolutePath)
+                startActivity(intentd)
+            }
+//                mergeaudioVideo(audioUri!!, videoUri!!);
         }
         btnchooseVideo.setOnClickListener {
             if (checkPermission()) {
@@ -239,7 +213,7 @@ class MainActivity : AppCompatActivity() {
                             audiview!!.setAudioProgress(
                                 mediaPlayer?.getCurrentPosition()!!.toLong()
                             )
-                            Log.e("mediaplayer ","cutrrentpos "+mediaPlayer!!.currentPosition.toLong()+" endtimemilis "+endTimeMillis)
+//                            Log.e("mediaplayer ","cutrrentpos "+mediaPlayer!!.currentPosition.toLong()+" endtimemilis "+endTimeMillis)
                             if (mediaPlayer!!.currentPosition.toLong() >= endTimeMillis) {
                                 mediaPlayer!!.seekTo(startTimeMillis.toInt())
                                 return
@@ -295,6 +269,25 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+    fun setupAudioFile(audioUri: Uri) {
+        val audioInputStream: InputStream
+        val FILE_NAM = "audiovideomerge"
+        val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
+        val audioFile = File(directory.toString())
+        val outputAudioFilePath = audioFile.toString() + File.separator + FILE_NAM + "_audiotmp.mp4"
+        audioInputStream = baseContext.getContentResolver().openInputStream(audioUri!!)!!
+        chosenAudioFile = createFileFromInputStream(audioInputStream, outputAudioFilePath)
+    }
+
+    fun setupVideoFile(videoUrl: Uri) {
+        val videoInputStream: InputStream
+        val FILE_NAM = "audiovideomerge"
+        val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
+        val videoFIle = File(directory.toString())
+        val outputVideoFilePath = videoFIle.toString() + File.separator + FILE_NAM + "_videotmp.mp4"
+        videoInputStream = baseContext.getContentResolver().openInputStream(videoUrl)!!
+        chosenVideoFile = createFileFromInputStream(videoInputStream, outputVideoFilePath)
     }
 
     private fun prepareMediaPlayer(
@@ -360,12 +353,35 @@ class MainActivity : AppCompatActivity() {
         return length?.toLong() ?: 0L
     }
 
-    private fun getDummyWaveSample(): ShortArray {
+    private fun getDummyWaveSample() {
+//        val amplituda = Amplituda(baseContext)
+
+/* Step 2: process audio and handle result */
+
+/* Step 2: process audio and handle result */
+//        amplituda.processAudio(chosendFile.absolutePath)[{ result: AmplitudaResult<String?> ->
+//            val amplitudesData: MutableList<Int>? = result.amplitudesAsList()
+//            val amplitudesForFirstSecond = result.amplitudesForSecond(1)
+//            val duration = result.getAudioDuration(AmplitudaResult.DurationUnit.SECONDS)
+//            val source = result.audioSource
+//            val sourceType = result.inputAudioType
+//            Log.e("amplitudesize ",amplitudesData!!.size.toString())
+//            Log.e("amplitudesize duration ",duration.toString())
+//            val data = ShortArray(amplitudesData!!.size.toInt())
+//        for (i in amplitudesData!!.indices)
+//            data[i] = i.toShort()
+////
+//            audiview!!.setAudioSamples(data)
+//        }, { exception: AmplitudaException? ->
+//            if (exception is AmplitudaIOException) {
+//                println("IO Exception!")
+//            }
+//        }]
         val data = ShortArray(50)
         for (i in data.indices)
             data[i] = Random().nextInt(data.size).toShort()
-
-        return data
+        audiview!!.setAudioSamples(data)
+//        return data
     }
 
     private fun mergeaudioVideo(inputuri: Uri, videoInputUri: Uri) {
@@ -453,6 +469,46 @@ class MainActivity : AppCompatActivity() {
             permission.READ_EXTERNAL_STORAGE
         ) == PackageManager.PERMISSION_GRANTED)
 
+    }
+
+    override fun onSelectRangeStart() {
+        Log.e("onSelectRangeStart", "");
+//                                TODO("Not yet implemented")
+    }
+
+    override fun onSelectRange(startMillis: Long, endMillis: Long) {
+        Log.e(
+            "onSelectedRange",
+            "statrt " + startMillis.toString() + " end " + endMillis.toString()
+        )
+//                                TODO("Not yet implemented")
+    }
+
+    override fun onSelectRangeEnd(startMillis: Long, endMillis: Long) {
+        Log.e(
+            "onSelectRangeEnd",
+            "statrt " + startMillis.toString() + " end " + endMillis.toString()
+        )
+        startTimeMillis = startMillis;
+        endTimeMillis = endMillis;
+        mediaPlayer?.seekTo(startTimeMillis.toInt())
+//                                TODO("Not yet implemented")
+    }
+
+    override fun onProgressStart() {
+        Log.e("onProgressStart", "");
+//                                TODO("Not yet implemented")
+    }
+
+    override fun onProgressEnd(millis: Long) {
+        mediaPlayer?.seekTo(millis.toInt())
+        Log.e("onProgressEnd", "statrt " + millis.toString())
+//                                TODO("Not yet implemented")
+    }
+
+    override fun onDragProgressBar(millis: Long) {
+        Log.e("onDragProgressBar", "statrt " + millis.toString())
+//                                TODO("Not yet implemented")
     }
 
 }
